@@ -81,6 +81,37 @@ void turn_right_degrees (int angle) {  //Turn-Right subroutine (Half speed)
   delay(duration);
   stop();
 }
+// Rotate
+void turn_degrees (int angle) {  //Turn-Right subroutine (Half speed)
+  
+  
+  int duration = (int)(abs(angle) * 21); // delay time in ms
+  
+  if (angle>=0)
+  {
+	analogWrite (VEL_L,127);   //Left  - half speed (value of 127 = half speed)
+	digitalWrite(DIR_L,LOW);   //Left  - direction control
+	analogWrite (VEL_R,127);   //Right - half speed (value of 127 = half speed)
+	digitalWrite(DIR_R,HIGH);  //Right - direction control
+	
+	delay(duration);
+	
+	stop();
+  }
+  else
+  {
+	analogWrite (VEL_L,127);   //Left  - half speed (value of 127 = half speed)
+	digitalWrite(DIR_L,HIGH);   //Left  - direction control
+	analogWrite (VEL_R,127);   //Right - half speed (value of 127 = half speed)
+	digitalWrite(DIR_R,LOW);  //Right - direction control
+	
+	delay(duration);
+	
+	stop();
+  }
+  
+}
+
 
 // Locomotion(Translocate)
 // ***** Test Forward subroutine (currently about a cm @ distance = 1)
