@@ -4,7 +4,7 @@ Apex Robotics (Company D) files
 Team is provided with robot:
  - DFRobotShop Rover V2 - Arduino Compatible Tracked Robot (Bluetooth Kit)
 
-========== ~ TASK BRIEF ~ ==========
+========== ~ TASK BRIEF ~ ========== 
 Robot will start a distance of 1m from a seaker with its orientation determined by a judge.
 There will be a bright Red LED fixture for it to locate ~5cm away from a music source.
 
