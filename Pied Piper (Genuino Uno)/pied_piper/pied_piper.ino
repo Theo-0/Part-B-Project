@@ -13,6 +13,20 @@
 #define DIR_R 7 //M2 Direction Control (M2)
 #define DIR_L 8 //M1 Direction Control (M1)
 
+// SparkFun Sound Detector (with Headers) [SEN-14262, $11.95]
+#define PIN_ANALOG_IN A0 // (analog input 0)
+
+// HC-SR04 Ultrasonic sensor
+#define TRIG_PIN 9
+#define ECHO_PIN 10
+
+// virtual earth & power
+#define GND 11
+#define VCC 12
+
+// Testing LED
+#define PIN_LED_OUT 13 // LED_ping
+
 #define LIGHT_MAX 240 // light max threshold to stop
 // ____________________________________________________________________________________________________ //
 /******************************************************************************/
@@ -21,42 +35,61 @@
 void setup() {
 
   for(int i=5; i<=8; i++)
-    pinMode(i, OUTPUT); // initialize pins as output
+    pinMode(i, OUTPUT); // initialize motor pins as output
 
+  pinMode(TRIG_PIN, OUTPUT);
+  //pinMode(ECHO_PIN, INPUT);
+  //pinMode(PIN_ANALOG_IN, INPUT);
+  
+  pinMode(PIN_LED_OUT, OUTPUT); //  Configure LED pin as output
+
+  // Pull up to operating voltage(5V)
+  pinMode(VCC, OUTPUT);
+  digitalWrite(VCC, HIGH);
+  
   // Open serial window @ 9600 baud
-  //Serial.begin(9600);
-  //Serial.println("setup");
-
-  face_sound();
+  Serial.begin(9600);
+  Serial.println("setup");
 }
 
 /******************************************************************************/
 /*** MAIN loop routine runs over and over again forever                     ***/
 /******************************************************************************/
 void loop() {
-    static int dist = 10; // 10 cm starting loco dist
-    //static const int LIGHT_MAX = 240; // light max threshold to stop
-    
-    //if(!face_light()) face_sound(); // Uncomment in Phase 2
-    face_light();
-    adjust(dist);
-    move_forward_mm(dist);
+//    // --------------------- ~ Uncomment for actual Pied Piper Code ~ ---------------------
+//    static int dist_mm = 10; // 10 mm starting loco dist
+//    //static const int LIGHT_MAX = 240; // light max threshold to stop
+//    
+//    //if(!face_light()) face_sound(); // Uncomment in Phase 2
+//    face_light();
+//    adjust(dist);
+//    move_forward_mm(dist);
+//
+//    //if((getValue() > LIGHT_MAX) || (get_ultra_d_cm() < 1)) { // Uncomment in Phase 2
+//    if((getValue() > LIGHT_MAX)) {
+//      // Celebrate w/ speaker, led, lcd display or fireworks/explosion!
+//      //fun();
+//      done();
+//    }
 
-    //if((getValue() > LIGHT_MAX) || (get_ultra_d_cm() < 1)) { // Uncomment in Phase 2
-    if((getValue() > LIGHT_MAX)) {
-      // Celebrate w/ speaker, led or lcd display!
-      //fun();
-      done();
-    }
-//    move_forward_mm(10); // ✓
-//    move_forward_mm(50); // ✗?
-//    move_forward_mm(100);// ✓
-    done();
+    // ------------------------------ ~ This section is reserved for testing ~ ------------------------------
+    //face_sound();
+
+    ////Face sound, and wait
+    //face_sound_720();
+    //digitalWrite(PIN_LED_OUT,HIGH);
+    //delay(5000);
+    //digitalWrite(PIN_LED_OUT,LOW);
+    //delay(5000);
+    
+    float distance_cm = get_ultra_d_cm();
+    Serial.println("Distance: " + (String)distance_cm);
+    delay(100); // every 1/10sec.
     
 }
 
-// ---------------------------------------- ~ Helper functions ~ ----------------------------------------
-// ------------------------- ~ Exit Arduino Loop ~ -------------------------
+// __________________________________________________| = Helper functions = |__________________________________________________
+// ------------------------------ ~ Exit Arduino Loop ~ -------------------------------
 void done() {
   // Loop forever and do nothing
   while (true) {
@@ -64,7 +97,8 @@ void done() {
   }
 }
 
-// ------------------------- ~ Mechanical (Motion) ~ -------------------------
+// --------------------------------------------- ~ Mechanical (Motion) ~ ---------------------------------------------
+
 // Halt
 void stop() { //Stop subroutine (Halt movement)
   
@@ -76,21 +110,35 @@ void stop() { //Stop subroutine (Halt movement)
 // Rotate - Turn_Right subroutine will work w/ -ve to turn left
 void turn_right_degrees (int angle) {  //Turn-Right subroutine (Half speed)
   
-  int duration = (int)(abs(angle) * 21); // delay time in ms
+  int duration;
+  if(abs(angle) <= 5)
+    duration = (int)(abs(angle) * 20); // delay time in ms
+  else if(abs(angle) <= 10)
+    duration = (int)(abs(angle) * 15);
+  else if(abs(angle) <= 20)
+    duration = (int)(abs(angle) * 12);
+  else if(abs(angle) <= 90)
+    duration = (int)(abs(angle) * 11);
+  else if(abs(angle) <= 200)
+    duration = (int)(abs(angle) * 10);
+  else if(abs(angle) <= 270)
+    duration = (int)(abs(angle) * 9);
+  else
+    duration = (int)(abs(angle) * 9);
   
   if (angle > 0) { // Right
-    analogWrite (VEL_L,127);   //Left  - half speed (value of 127 = half speed)
+    analogWrite (VEL_L,255);   //Left  - full speed (value of 127 = half speed)
     digitalWrite(DIR_L,LOW);   //Left  - direction control
-    analogWrite (VEL_R,127);   //Right - half speed (value of 127 = half speed)
+    analogWrite (VEL_R,255);   //Right - full speed (value of 127 = half speed)
     digitalWrite(DIR_R,HIGH);  //Right - direction control
   }
   else { // Left
-    analogWrite (VEL_L,127);   //Left  - half speed (value of 127 = half speed)
+    analogWrite (VEL_L,255);   //Left  - full speed (value of 127 = half speed)
     digitalWrite(DIR_L,HIGH);  //Left  - direction control
-    analogWrite (VEL_R,127);   //Right - half speed (value of 127 = half speed)
+    analogWrite (VEL_R,255);   //Right - full speed (value of 127 = half speed)
     digitalWrite(DIR_R,LOW);   //Right - direction control
   }
-
+  
   //String message = "right by " + (String)angle + " degrees";
   //Serial.println(message);
   delay(duration);
@@ -119,25 +167,57 @@ void move_forward_mm(int distance) {
   stop();
 }
 
-// ------------------------- ~ Sensory ~ -------------------------
+// --------------------------------------------- ~ 'Finding' Logic Definitions ~ ---------------------------------------------
 
+// Might take 3-5 times quickly then avg. Depends on quality & speed performance
+int getValue() {} // e.g. return analogRead(A0);
+
+void adjust(int& distance) {
+  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
+}
+
+void face_sound_720() {
+  int theta = 60;
+  int total_turns = 720/theta;
+  int directions[total_turns] = {0};
+  int maxIndex = 0;
+  int maxValue = 0;
+  
+  // 720 check
+  for(int i=0; i<total_turns; i++) { // **** Keep checking. Forever if 720° surround-sound
+    directions[i] = getSound();
+    if(directions[i] > maxValue) {
+      maxValue = directions[i];
+      maxIndex = i;
+    }
+    turn_right_degrees(theta);
+  }
+  
+  turn_right_degrees((total_turns-maxIndex) * -theta);
+  // e.g. if 10 turns(0-9) and u want 3. Turn back 6 (i.e. 9-3)
+  
+}
 void face_sound() {
-  int theta = 5;
+  int theta = 30;
   int cur=0, old=0;
+  int significance = 7;
 
   // Right check
   while(true) { // **** Keep checking. Forever if 360° surround-sound
-    cur = getValue();
-    if(cur < old) break; // check if intensity drops
+    cur = getSound();
+    //if(cur < old) break; // check if intensity drops
+    if((old - cur) > significance) break; // if intensity drops significantly
     turn_right_degrees(theta);
     old = cur;
   }
   turn_right_degrees(-theta);
+  old = 0;
 
   // Left Check
   while(true) {
-    cur = getValue();
-    if(cur < old) break; // check if intensity falls
+    cur = getSound();
+    //if(cur < old) break; // check if intensity falls
+    if((old - cur) > significance) break; // if intensity falls significantly
     turn_right_degrees(-theta);
     old = cur;
   }
@@ -151,15 +231,36 @@ bool face_light() {
   return (cur > light_min);
 }
 
+// --------------------------------------------- ~ Sensory Systems ~ ---------------------------------------------
+
+// Returns avg sound amp as voltage(default between 0 to 1023)
+int getSound() {
+  int sval = 0; // sum value
+  int samples = 2000;
+  for(int i=0; i<samples; i++)
+    sval += analogRead(PIN_ANALOG_IN);
+  return sval / samples; // avg
+}
+
 // Turns ultrasound echo time to distance
-int get_ultra_d_cm() {
-  // s = v * t (v = speed of sound in dry air at 20 °C. Adjust if needed)
-  return 343 * getValue() * 100;
-}
+float get_ultra_d_cm() {
+  // Generate ultrasonic wave
+  digitalWrite(TRIG_PIN, LOW); 
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
 
-void adjust(int& distance) {
-  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
+  // Read the echoPin, returns the sound wave travel time in microseconds
+  unsigned long duration = pulseIn(ECHO_PIN, HIGH);
+  
+  // Calculate & return distance: s = t/2 * c (t = time taken to obj & back!)
+  return (duration/2) * .0343; // (c = speed of sound in dry air at 20 °C in cm/μs)
 }
+//✓✗
 
-// Might take 3-5 times quickly then avg. Depends on quality & speed performance
-int getValue() {} // e.g. return analogRead(A0);
+/*
+ * @TODO
+ * light
+ * standardize motion accuracy and reliability on carpet if running for a while(i.e. depleting battery)
+ */
