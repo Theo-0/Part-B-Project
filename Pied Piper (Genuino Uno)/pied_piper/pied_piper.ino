@@ -17,7 +17,7 @@
 #define PIN_ANALOG_IN A0 // (analog input 0)
 
 // RS TEPT4400 Phototransistor
-#define PIN_PHOTO_IN  A3 // (analog input 3)
+#define PIN_PHOTO_IN  A5 // (analog input 5)
 
 // HC-SR04 Ultrasonic sensor
 #define TRIG_PIN 9
@@ -27,10 +27,17 @@
 #define GND 11
 #define VCC 12
 
+// virtual earth & power for 2nd phototransistor
+#define GND2 2
+#define VCC2 3
+
 // Testing LED
 #define PIN_LED_OUT 13 // LED_ping
 
 #define LIGHT_MAX 240 // light max threshold to stop
+
+float dist_mm = 400; // 40cm
+
 // ____________________________________________________________________________________________________ //
 /******************************************************************************/
 /*** setup routine sets up RESOURCES & runs once when you press reset       ***/
@@ -50,15 +57,26 @@ void setup() {
   // Pull up to operating voltage(5V)
   pinMode(VCC, OUTPUT);
   digitalWrite(VCC, HIGH);
+  pinMode(VCC2, OUTPUT);
+  digitalWrite(VCC2, HIGH);
+
+  // Pull down to common earth (0 volts)
+  pinMode(GND2, OUTPUT);
+  digitalWrite(GND2, LOW);
+  
   
   // Open serial window @ 9600 baud
   Serial.begin(9600);
   Serial.println("setup");
+  
+  // Ultrasound flush. Needed so ultrasound doesn't spaz out at start
+  if((get_ultra_d_cm() <= 3.0)) Serial.println("Hi there!");
 }
 
 /******************************************************************************/
 /*** MAIN loop routine runs over and over again forever                     ***/
 /******************************************************************************/
+//void loop1(){}
 void loop() {
 //    // --------------------- ~ Uncomment for actual Pied Piper Code ~ ---------------------
 //    static int dist_mm = 10; // 10 mm starting loco dist
@@ -79,21 +97,25 @@ void loop() {
     // ------------------------------ ~ This section is reserved for testing ~ ------------------------------
     //face_sound();
 
-    ////Face sound, and wait
-    face_ultra_480();
-    float s = get_ultra_d_cm();
-    while(s > 11) {
-      move_forward_mm(10);
-      delay(100);
-      s = get_ultra_d_cm();
+    ////Face closest thing, and wait
+//    face_ultra_480();
+//    float s = get_ultra_d_cm();
+
+    float bright = getLight();
+    // Check to stop robot before trying to face anything
+    //if((bright > 2.0) || (get_ultra_d_cm() <= 3.0)) { // Swap w/ next line when considering ultrasound
+    if((bright > 2.0)) {
+      digitalWrite(PIN_LED_OUT,HIGH);
+      delay(5000);
+      digitalWrite(PIN_LED_OUT,LOW);
+      delay(5000);
+      done();
     }
+    face_light_480();
+    dist_mm = ((dist_mm <= 100)) ? 100 : dist_mm*0.6;
+    move_forward_mm(dist_mm);
+
     
-//    face_light_480();
-    
-    digitalWrite(PIN_LED_OUT,HIGH);
-    delay(5000);
-    digitalWrite(PIN_LED_OUT,LOW);
-    delay(5000);
     
 //    float distance_cm = get_ultra_d_cm();
 //    Serial.println("Distance: " + (String)distance_cm);
@@ -121,6 +143,9 @@ void stop() { //Stop subroutine (Halt movement)
 }
 
 // Rotate - Turn_Right subroutine will work w/ -ve to turn left
+// Uses case structure to regulate how long to rotate for. This
+// tries to account for the resistive force that largely affects small
+// movements. Is relative to battery and subject to changes.
 void turn_right_degrees (int angle) {  //Turn-Right subroutine (Half speed)
   
   int duration;
@@ -155,7 +180,8 @@ void turn_right_degrees (int angle) {  //Turn-Right subroutine (Half speed)
   //String message = "right by " + (String)angle + " degrees";
   //Serial.println(message);
   delay(duration);
-  stop();  
+  stop(); 
+  
 }
 
 
@@ -182,37 +208,39 @@ void move_forward_mm(int distance) {
 
 // --------------------------------------------- ~ 'Finding' Logic Definitions ~ ---------------------------------------------
 
-// Might take 3-5 times quickly then avg. Depends on quality & speed performance
-int getValue() {} // e.g. return analogRead(A0);
+//// Might take 3-5 times quickly then avg. Depends on quality & speed performance
+//int getValue() {} // e.g. return analogRead(A0);
+//
+//void adjust(int& distance) {
+//  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
+//}
 
-void adjust(int& distance) {
-  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
-}
+//// Face_Ultrasound_Test_Simulation
+//void face_ultra_480_sim() {
+//  int dirs[8] = {115,75,65,13,124,60,130,55};
+//  //              0  1  2  |3| 4  5   6   7
+//  int theta = 60;
+//  int total_turns = 480/theta;
+//  int minIndex;
+//  int minValue = dirs[0];
+//  
+//  // 480 check
+//  for(int i=0; i<total_turns; i++) {
+//    Serial.println(dirs[i]);
+//    if(dirs[i] < minValue) {
+//      minValue = dirs[i];
+//      minIndex = i;
+//    }
+//  }
+//
+//  Serial.println("Now going back. MinVal was " + (String)minValue + " at index " + (String)minIndex);
+//  for(int i=total_turns-1; i>=minIndex; i--)
+//    Serial.println(dirs[i]);
+//  
+//}
 
-// Face_Ultrasound_Test_Simulation
-void face_ultra_480_sim() {
-  int dirs[8] = {115,75,65,13,124,60,130,55};
-  //              0  1  2  |3| 4  5   6   7
-  int theta = 60;
-  int total_turns = 480/theta;
-  int minIndex;
-  int minValue = dirs[0];
-  
-  // 480 check
-  for(int i=0; i<total_turns; i++) {
-    Serial.println(dirs[i]);
-    if(dirs[i] < minValue) {
-      minValue = dirs[i];
-      minIndex = i;
-    }
-  }
 
-  Serial.println("Now going back. MinVal was " + (String)minValue + " at index " + (String)minIndex);
-  for(int i=total_turns-1; i>=minIndex; i--)
-    Serial.println(dirs[i]);
-  
-}
-// Face closest thing using ultrasound
+// Turn 480° sweep to face closest thing (using ultrasound)
 void face_ultra_480() {
   int theta = 15;
   int total_turns = 480/theta;
@@ -253,6 +281,9 @@ void face_ultra_480() {
   delay(5000);
 }
 
+
+
+// Turn 720° sweep to face loudest thing (using microphone)
 void face_sound_720() {
   int theta = 60;
   int total_turns = 720/theta;
@@ -274,34 +305,38 @@ void face_sound_720() {
   // e.g. if 10 turns(0-9) and u want 3. Turn back 6 (i.e. 9-3)
   
 }
-void face_sound() {
-  int theta = 30;
-  int cur=0, old=0;
-  int significance = 7;
+//// Attempt to use low-high-low method with a minimum significance level to avoid
+//// errors due to very small changes 
+//void face_sound() {
+//  int theta = 30;
+//  int cur=0, old=0;
+//  int significance = 7;
+//
+//  // Right check
+//  while(true) { // **** Keep checking. Forever if 360° surround-sound
+//    cur = getSound();
+//    //if(cur < old) break; // check if intensity drops
+//    if((old - cur) > significance) break; // if intensity drops significantly
+//    turn_right_degrees(theta);
+//    old = cur;
+//  }
+//  turn_right_degrees(-theta);
+//  old = 0;
+//
+//  // Left Check
+//  while(true) {
+//    cur = getSound();
+//    //if(cur < old) break; // check if intensity falls
+//    if((old - cur) > significance) break; // if intensity falls significantly
+//    turn_right_degrees(-theta);
+//    old = cur;
+//  }
+//  turn_right_degrees(theta);
+//  
+//}
 
-  // Right check
-  while(true) { // **** Keep checking. Forever if 360° surround-sound
-    cur = getSound();
-    //if(cur < old) break; // check if intensity drops
-    if((old - cur) > significance) break; // if intensity drops significantly
-    turn_right_degrees(theta);
-    old = cur;
-  }
-  turn_right_degrees(-theta);
-  old = 0;
 
-  // Left Check
-  while(true) {
-    cur = getSound();
-    //if(cur < old) break; // check if intensity falls
-    if((old - cur) > significance) break; // if intensity falls significantly
-    turn_right_degrees(-theta);
-    old = cur;
-  }
-  turn_right_degrees(theta);
-  
-}
-
+// Turn 480° sweep to face brightest thing i.e. greatest lumens (using phototransistor)
 bool face_light_480() {
   int light_min = 205; // approx a fifth of supply
   int theta = 15;
@@ -318,7 +353,6 @@ bool face_light_480() {
       maxIndex = i;
     }
     turn_right_degrees(theta);
-    Serial.println(directions[i]);
   }
 
   Serial.println("Now going back. MaxVal was " + (String)maxValue + " at index " + (String)maxIndex);
@@ -343,15 +377,16 @@ int getSound() {
   return sval / samples; // avg
 }
 
-int getLight() {
-  int sval = 0;
-  int samples = 3;
+// Returns avg light amp as voltage(default between 0V to 5V)
+float getLight() {
+  float sval = 0;
+  float samples = 3;
   for(int i=0; i<samples; i++)
     sval += analogRead(PIN_PHOTO_IN);
-  return sval / samples;
+  return sval / samples * (5.0 / 1024.0);
 }
 
-// Turns ultrasound echo time to distance
+// Turns average ultrasound echo time to distance & returns it in cm
 float get_ultra_d_cm() {
   unsigned long duration;
   unsigned long sval = 0; // sum value
@@ -379,6 +414,8 @@ float get_ultra_d_cm() {
 
 /*
  * @TODO
- * light
+ * describe functions & their parameters
+ * light + sound
+ * try attempting 360°/480° sweep first, then proceeding to low-high-low method to save battery through movement minimization
  * standardize motion accuracy and reliability on carpet if running for a while(i.e. depleting battery)
  */
