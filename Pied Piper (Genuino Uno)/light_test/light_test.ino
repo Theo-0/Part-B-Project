@@ -35,5 +35,5 @@ void loop() {                                // Main loop auto-repeats
 }
                                              
 float volts(int adPin) {                     // Measures volts at adPin. Returns floating point voltage
- return float(analogRead(adPin)) * 5.0 / 1024.0;
+ return 5 - float(analogRead(adPin)) * 5.0 / 1024.0;
 }    
