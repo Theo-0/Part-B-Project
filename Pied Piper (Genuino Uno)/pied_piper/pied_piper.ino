@@ -2,8 +2,8 @@
 /***      BEWARE LOCAL MA✘IMA!!!      ***/
 /****************************************/
 
-/* ***** Red Light Detection(May just use gel filter paper)
-/* ***** Getting music frequencies(perhaps analyze piece in MATLAB and import array of freqs)
+/* ***** Red Light Detection: Will use Red Optical Longpass Filter(590nm) Lens. (No longer gel filter paper)
+/* ***** Getting music frequencies(perhaps analyze piece in MATLAB and import array of freqs) ✘
 /* ***** Music Detection(?)
  */
 /* Declare pins connected to respective s̶e̶r̶v̶o̶s̶ DC gear motors */
@@ -36,7 +36,10 @@
 
 #define LIGHT_MAX 240 // light max threshold to stop
 
-float dist_mm = 400; // 40cm
+// Global variables for distance to move forward & sweep angle
+// (so they're seen in loop()) * haven't tested the static keyword in loop()
+int dist_mm = 400; // 40cm
+int sweep_angle = 480; // arbitrary value to ensure at least one 360° sweep regardless of battery power
 
 // ____________________________________________________________________________________________________ //
 /******************************************************************************/
@@ -95,27 +98,32 @@ void loop() {
 //    }
 
     // ------------------------------ ~ This section is reserved for testing ~ ------------------------------
-    //face_sound();
 
-    ////Face closest thing, and wait
-//    face_ultra_480();
-//    float s = get_ultra_d_cm();
-
-    float bright = getLight();
     // Check to stop robot before trying to face anything
-    //if((bright > 2.0) || (get_ultra_d_cm() <= 3.0)) { // Swap w/ next line when considering ultrasound
-    if((bright > 2.0)) {
+    float bright = getLight();
+    //if((getLight() > 2.0) || (get_ultra_d_cm() <= 3.0)) { // Swap w/ next line when considering ultrasound
+    if((bright > 1.5)) {
       digitalWrite(PIN_LED_OUT,HIGH);
       delay(5000);
       digitalWrite(PIN_LED_OUT,LOW);
       delay(5000);
       done();
     }
-    face_light_480();
-    dist_mm = ((dist_mm <= 100)) ? 100 : dist_mm*0.6;
+
+    // If not too close, we can proceed...
+
+    // Adjust angle by LIGHT INTENSITY
+    // Dependent on if robot sees fixture far brighter than surrounding!
+    //  e.g. doesn't mistake being close to wight surface as being 40cm away from fixture
+    adjust_angle(sweep_angle, bright)
+    
+    // Face light
+    turn_right_degrees(-sweep_angle/2); // turn left by half the angle to get ready. Might be removed
+    face_light(sweep_angle);
+    
+    // Similarly, Adjust distance might base on either light intensity or ultrasound distance)
     move_forward_mm(dist_mm);
 
-    
     
 //    float distance_cm = get_ultra_d_cm();
 //    Serial.println("Distance: " + (String)distance_cm);
@@ -210,10 +218,33 @@ void move_forward_mm(int distance) {
 
 //// Might take 3-5 times quickly then avg. Depends on quality & speed performance
 //int getValue() {} // e.g. return analogRead(A0);
-//
-//void adjust(int& distance) {
-//  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
-//}
+
+// UNDER DEVELOPMENT
+// Consider: 
+//   - Reduce distance if close enough to be facing the fixture(1m) &&
+//   - the moving distance is large enough to be meaningful(2cm)
+void adjust_distance(int& distance) {
+  distance = ((getValue() > LIGHT_MAX-40) || (get_ultra_d_cm() < 5)) ? (int)(distance / 2) : distance;
+}
+
+// Adjusts given angle(by reference) according to look-up table of
+// angles and light intensities to optimize search radius
+// STILL UNDER DEVELOPMENT
+void adjust_angle(int& angle, float intensity) {
+  int max_angle = 480;
+  int angle = max_angle; // set angle to max by default
+
+  // empirically obtained best angles at certain light intensities(indicating distances)
+  if(intensity > 2.25) {
+    angle = 50;
+  }elsif(intensity > 2.00) {
+    angle = 100;
+  }elsif(intensity > 1.80) {
+    angle = 180;
+  }// and so on... up till about a base of 480
+
+  return;
+}
 
 //// Face_Ultrasound_Test_Simulation
 //void face_ultra_480_sim() {
@@ -337,15 +368,16 @@ void face_sound_720() {
 
 
 // Turn 480° sweep to face brightest thing i.e. greatest lumens (using phototransistor)
-bool face_light_480() {
-  int light_min = 205; // approx a fifth of supply
+// Returns true if light source above certain threshold(LIGHT_MIN)was found, else false
+bool face_light(int sweep_angle) {
+  const int LIGHT_MIN = 205; // approx a fifth of supply
   int theta = 15;
-  int total_turns = 480/theta;
+  int total_turns = sweep_angle/theta;
   float directions[total_turns] = {0};
   int maxIndex=0;
   float maxValue=0;
 
-  // 480 check
+  // sweep_angle(480) check
   for(int i=0; i<total_turns; i++) { // **** Keep checking. Forever if 480° surround-sound
     directions[i] = getLight();
     if(directions[i] > maxValue) {
@@ -362,8 +394,7 @@ bool face_light_480() {
     turn_right_degrees(-theta);
     Serial.println(directions[i]);
   }
-  
-  return (maxValue > light_min);
+  return (maxValue > LIGHT_MIN);
 }
 
 // --------------------------------------------- ~ Sensory Systems ~ ---------------------------------------------
@@ -383,7 +414,7 @@ float getLight() {
   float samples = 3;
   for(int i=0; i<samples; i++)
     sval += analogRead(PIN_PHOTO_IN);
-  return sval / samples * (5.0 / 1024.0);
+  return 5 - (sval / samples * (5.0 / 1024.0) );
 }
 
 // Turns average ultrasound echo time to distance & returns it in cm
@@ -402,8 +433,6 @@ float get_ultra_d_cm() {
     // Read the echoPin, returns the sound wave travel time in microseconds
     duration = pulseIn(ECHO_PIN, HIGH);
     sval += duration;
-    
-    //delay(1);
   }
   duration = sval / samples;
   
@@ -414,7 +443,9 @@ float get_ultra_d_cm() {
 
 /*
  * @TODO
- * describe functions & their parameters
+ * RESOLVE POWER ISSUE! - Current plan is continue testing w/ power pack,
+ *   then buy fresh non-rechargeable batteries for the big day
+ * describe functions & their parameters a bit more perhaps
  * light + sound
  * try attempting 360°/480° sweep first, then proceeding to low-high-low method to save battery through movement minimization
  * standardize motion accuracy and reliability on carpet if running for a while(i.e. depleting battery)
